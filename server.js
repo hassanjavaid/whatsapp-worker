@@ -13,12 +13,13 @@ app.use(cors());
 
 // Database configuration – use environment variables
 // Database configuration – use environment variables with fallbacks
+// Database configuration – use Railway's internal connection
 const dbConfig = {
-    host: process.env.MYSQLHOST || process.env.DB_HOST || 'gondola.proxy.rlwy.net',
-    port: process.env.MYSQLPORT || process.env.DB_PORT || 33982,
-    user: process.env.MYSQLUSER || process.env.DB_USER || 'root',
-    password: process.env.MYSQLPASSWORD || process.env.DB_PASS || 'PAmTgOwNHySXVfxaXNhhbQGnpHlCJUZs',
-    database: process.env.MYSQLDATABASE || process.env.DB_NAME || 'railway'
+    host: process.env.MYSQLHOST || 'mysql.railway.internal',
+    port: process.env.MYSQLPORT || 3306,
+    user: process.env.MYSQLUSER || 'root',
+    password: process.env.MYSQLPASSWORD || '',
+    database: process.env.MYSQLDATABASE || 'railway'
 };
 
 let db;
