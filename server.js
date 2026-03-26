@@ -220,11 +220,11 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok', sessions: sessions.size });
 });
 
-// Start server
 async function start() {
     await initDB();
-    app.listen(3000, () => {
-        console.log('🚀 WhatsApp Worker running on port 3000');
+    const port = process.env.PORT || 3000;
+    app.listen(port, () => {
+        console.log(`🚀 WhatsApp Worker running on port ${port}`);
     });
 }
 
