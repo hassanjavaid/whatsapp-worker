@@ -12,10 +12,11 @@ app.use(cors());
 
 // Database configuration
 const dbConfig = {
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'whatsapp_university'
+    host: process.env.MYSQLHOST || 'gondola.proxy.rlwy.net',   // fallback to your Railway host
+    port: process.env.MYSQLPORT || 33982,
+    user: process.env.MYSQLUSER || 'root',
+    password: process.env.MYSQLPASSWORD || 'PAmTgOwNHySXVfxaXNhhbQGnpHlCJUZs',
+    database: process.env.MYSQLDATABASE || 'railway'
 };
 
 let db;
