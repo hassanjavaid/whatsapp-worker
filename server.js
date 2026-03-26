@@ -5,14 +5,15 @@ const mysql = require('mysql2/promise');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const puppeteer = require('puppeteer-core');
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Database configuration
+// Database configuration – use environment variables
 const dbConfig = {
-    host: process.env.MYSQLHOST || 'gondola.proxy.rlwy.net',   // fallback to your Railway host
+    host: process.env.MYSQLHOST || 'gondola.proxy.rlwy.net',
     port: process.env.MYSQLPORT || 33982,
     user: process.env.MYSQLUSER || 'root',
     password: process.env.MYSQLPASSWORD || 'PAmTgOwNHySXVfxaXNhhbQGnpHlCJUZs',
@@ -39,7 +40,11 @@ app.post('/start-session', async (req, res) => {
         
         const client = new Client({
             authStrategy: new LocalAuth({ dataPath: sessionDir }),
-            puppeteer: { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] }
+            puppeteer: {
+                headless: true,
+                executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome-stable',
+                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+            }
         });
         
         sessions.set(instance_id, { client });
@@ -130,17 +135,14 @@ app.post('/fetch-messages', async (req, res) => {
 
     try {
         const client = session.client;
-        // Format contact number
         let contactId = contact;
         if (!contactId.includes('@')) contactId = `${contactId}@c.us`;
 
-        // Get chat
         const chat = await client.getChatById(contactId);
         if (!chat) {
             return res.status(404).json({ error: 'Chat not found' });
         }
 
-        // Fetch messages (limit)
         const messages = await chat.fetchMessages({ limit: parseInt(limit) });
         const formatted = messages.map(msg => ({
             id: msg.id.id,
@@ -220,6 +222,7 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok', sessions: sessions.size });
 });
 
+// Start server
 async function start() {
     await initDB();
     const port = process.env.PORT || 3000;
