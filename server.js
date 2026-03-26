@@ -15,11 +15,11 @@ app.use(cors());
 // Database configuration – use environment variables with fallbacks
 // Database configuration – use Railway's internal connection
 const dbConfig = {
-    host: process.env.MYSQLHOST || 'mysql.railway.internal',
+    host: process.env.MYSQLHOST || '159.69.141.61',
     port: process.env.MYSQLPORT || 3306,
-    user: process.env.MYSQLUSER || 'root',
-    password: process.env.MYSQLPASSWORD || '',
-    database: process.env.MYSQLDATABASE || 'railway'
+    user: process.env.MYSQLUSER || 'labsoftw_whatsapp',
+    password: process.env.MYSQLPASSWORD || 'labsoftw_whatsapp',
+    database: process.env.MYSQLDATABASE || 'labsoftw_whatsapp'
 };
 
 let db;
