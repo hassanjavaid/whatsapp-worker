@@ -12,20 +12,38 @@ app.use(express.json());
 app.use(cors());
 
 // Database configuration – use environment variables
+// Database configuration – use environment variables with fallbacks
 const dbConfig = {
-    host: process.env.MYSQLHOST || 'gondola.proxy.rlwy.net',
-    port: process.env.MYSQLPORT || 33982,
-    user: process.env.MYSQLUSER || 'root',
-    password: process.env.MYSQLPASSWORD || 'PAmTgOwNHySXVfxaXNhhbQGnpHlCJUZs',
-    database: process.env.MYSQLDATABASE || 'railway'
+    host: process.env.MYSQLHOST || process.env.DB_HOST || 'gondola.proxy.rlwy.net',
+    port: process.env.MYSQLPORT || process.env.DB_PORT || 33982,
+    user: process.env.MYSQLUSER || process.env.DB_USER || 'root',
+    password: process.env.MYSQLPASSWORD || process.env.DB_PASS || 'PAmTgOwNHySXVfxaXNhhbQGnpHlCJUZs',
+    database: process.env.MYSQLDATABASE || process.env.DB_NAME || 'railway'
 };
 
 let db;
 const sessions = new Map();
 
 async function initDB() {
-    db = await mysql.createConnection(dbConfig);
-    console.log('✅ Database connected');
+    try {
+        console.log('Attempting to connect to database...');
+        console.log('Host:', dbConfig.host);
+        console.log('Port:', dbConfig.port);
+        console.log('Database:', dbConfig.database);
+        console.log('User:', dbConfig.user);
+        
+        db = await mysql.createConnection(dbConfig);
+        console.log('✅ Database connected');
+        
+        // Test the connection
+        await db.query('SELECT 1');
+        console.log('✅ Database query successful');
+        
+    } catch (err) {
+        console.error('❌ Database connection failed:', err.message);
+        console.error('Full error:', err);
+        // Don't exit - let the app try to recover
+    }
 }
 
 // Start WhatsApp session
