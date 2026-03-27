@@ -45,34 +45,11 @@ app.post('/start-session', async (req, res) => {
         
         console.log(`Starting session: ${instance_id}`);
         
-        // Try multiple possible Chrome paths
-        const possiblePaths = [
-            '/usr/bin/chromium',
-            '/usr/bin/chromium-browser',
-            '/usr/bin/google-chrome-stable',
-            '/usr/bin/google-chrome'
-        ];
-        
-        let chromePath = null;
-        for (const p of possiblePaths) {
-            if (fs.existsSync(p)) {
-                chromePath = p;
-                break;
-            }
-        }
-        
-        if (!chromePath) {
-            console.error('❌ Chrome not found!');
-            return res.status(500).json({ error: 'Browser not installed' });
-        }
-        
-        console.log(`✅ Using Chrome: ${chromePath}`);
-        
+        // Let Puppeteer find Chromium automatically - NO executablePath specified
         const client = new Client({
             authStrategy: new LocalAuth({ dataPath: sessionDir }),
             puppeteer: {
                 headless: true,
-                executablePath: chromePath,
                 args: [
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
