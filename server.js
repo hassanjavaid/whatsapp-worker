@@ -5,11 +5,35 @@ const mysql = require('mysql2/promise');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
-const puppeteer = require('puppeteer-core');
+const { execSync } = require('child_process');
 
 const app = express();
 app.use(express.json());
 app.use(cors());
+
+// Find Chrome/Chromium
+function findChrome() {
+    const possiblePaths = [
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/google-chrome',
+        '/opt/google/chrome/chrome'
+    ];
+    
+    for (const p of possiblePaths) {
+        if (fs.existsSync(p)) {
+            return p;
+        }
+    }
+    
+    try {
+        const which = execSync('which chromium || which chromium-browser || which google-chrome-stable || which google-chrome', { encoding: 'utf8' }).trim();
+        if (which) return which;
+    } catch (e) {}
+    
+    return null;
+}
 
 // Database configuration
 const dbConfig = {
@@ -44,13 +68,20 @@ app.post('/start-session', async (req, res) => {
             fs.mkdirSync(sessionDir, { recursive: true });
         }
         
+        const chromePath = findChrome();
+        if (!chromePath) {
+            console.error('❌ No Chrome/Chromium found!');
+            return res.status(500).json({ error: 'Browser not installed' });
+        }
+        
+        console.log(`✅ Using Chrome at: ${chromePath}`);
         console.log(`Starting session: ${instance_id}`);
         
         const client = new Client({
             authStrategy: new LocalAuth({ dataPath: sessionDir }),
             puppeteer: {
                 headless: true,
-                executablePath: '/usr/bin/google-chrome-stable',
+                executablePath: chromePath,
                 args: [
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
@@ -105,11 +136,18 @@ app.post('/send-message', async (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', sessions: sessions.size, db: db ? 'ok' : 'no' });
+    res.json({ 
+        status: 'ok', 
+        sessions: sessions.size, 
+        db: db ? 'ok' : 'no',
+        chrome: findChrome() ? 'found' : 'missing'
+    });
 });
 
 async function start() {
     await initDB();
+    const chromePath = findChrome();
+    console.log(`Chrome status: ${chromePath ? '✅ Found at ' + chromePath : '❌ Not found'}`);
     const port = process.env.PORT || 3000;
     app.listen(port, () => {
         console.log(`🚀 Worker on port ${port}`);
