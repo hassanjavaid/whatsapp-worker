@@ -11,9 +11,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Database configuration – use environment variables
-// Database configuration – use environment variables with fallbacks
-// Database configuration – use Railway's internal connection
+// Database configuration
 const dbConfig = {
     host: process.env.MYSQLHOST || '159.69.141.61',
     port: process.env.MYSQLPORT || 3306,
@@ -27,23 +25,19 @@ const sessions = new Map();
 
 async function initDB() {
     try {
-        console.log('Attempting to connect to database...');
+        console.log('Connecting to database...');
         console.log('Host:', dbConfig.host);
-        console.log('Port:', dbConfig.port);
-        console.log('Database:', dbConfig.database);
         console.log('User:', dbConfig.user);
+        console.log('Database:', dbConfig.database);
         
         db = await mysql.createConnection(dbConfig);
         console.log('✅ Database connected');
         
-        // Test the connection
         await db.query('SELECT 1');
         console.log('✅ Database query successful');
         
     } catch (err) {
         console.error('❌ Database connection failed:', err.message);
-        console.error('Full error:', err);
-        // Don't exit - let the app try to recover
     }
 }
 
@@ -57,24 +51,40 @@ app.post('/start-session', async (req, res) => {
             fs.mkdirSync(sessionDir, { recursive: true });
         }
         
+        console.log('Creating WhatsApp client for:', instance_id);
+        console.log('Session path:', sessionDir);
+        
         const client = new Client({
             authStrategy: new LocalAuth({ dataPath: sessionDir }),
             puppeteer: {
                 headless: true,
-                executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome-stable',
-                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+                executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome-stable',
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-gpu',
+                    '--disable-software-rasterizer',
+                    '--disable-extensions',
+                    '--disable-web-security'
+                ]
             }
         });
         
         sessions.set(instance_id, { client });
         
         client.on('qr', async (qr) => {
+            console.log(`📱 QR code received for ${instance_id}`);
             const qrDataURL = await qrcode.toDataURL(qr);
             await db.execute(
                 "UPDATE instances SET qr_code = ?, status = 'scanning', qr_code_expires = DATE_ADD(NOW(), INTERVAL 2 MINUTE) WHERE instance_id = ?",
                 [qrDataURL, instance_id]
             );
-            console.log(`📱 QR generated for ${instance_id}`);
+            console.log(`✅ QR saved to database for ${instance_id}`);
+        });
+        
+        client.on('authenticated', () => {
+            console.log(`✅ ${instance_id} authenticated`);
         });
         
         client.on('ready', async () => {
@@ -109,7 +119,9 @@ app.post('/start-session', async (req, res) => {
             sessions.delete(instance_id);
         });
         
+        console.log('Initializing WhatsApp client...');
         await client.initialize();
+        console.log(`✅ Client initialized for ${instance_id}`);
         res.json({ success: true });
         
     } catch (error) {
@@ -125,7 +137,7 @@ app.post('/send-message', async (req, res) => {
     try {
         const session = sessions.get(instance_id);
         if (!session || !session.client) {
-            await db.execute("UPDATE messages SET status = 'failed', error_message = 'Session not connected' WHERE id = ?", [message_id]);
+            if (db) await db.execute("UPDATE messages SET status = 'failed', error_message = 'Session not connected' WHERE id = ?", [message_id]);
             return res.status(400).json({ error: 'Session not connected' });
         }
         
@@ -134,17 +146,17 @@ app.post('/send-message', async (req, res) => {
         if (!number.includes('@')) number = `${number}@c.us`;
         
         const result = await client.sendMessage(number, message);
-        await db.execute("UPDATE messages SET status = 'sent', message_id = ?, sent_at = NOW() WHERE id = ?", [result.id.id, message_id]);
+        if (db) await db.execute("UPDATE messages SET status = 'sent', message_id = ?, sent_at = NOW() WHERE id = ?", [result.id.id, message_id]);
         res.json({ success: true });
         
     } catch (error) {
         console.error('Error sending message:', error);
-        await db.execute("UPDATE messages SET status = 'failed', error_message = ? WHERE id = ?", [error.message, message_id]);
+        if (db) await db.execute("UPDATE messages SET status = 'failed', error_message = ? WHERE id = ?", [error.message, message_id]);
         res.status(500).json({ error: error.message });
     }
 });
 
-// Fetch recent messages from a specific contact
+// Fetch recent messages
 app.post('/fetch-messages', async (req, res) => {
     const { instance_id, contact, limit = 50 } = req.body;
     const session = sessions.get(instance_id);
@@ -238,7 +250,11 @@ app.post('/sync-contacts', async (req, res) => {
 
 // Health check
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', sessions: sessions.size });
+    res.json({ 
+        status: 'ok', 
+        sessions: sessions.size,
+        db: db ? 'connected' : 'disconnected'
+    });
 });
 
 // Start server
