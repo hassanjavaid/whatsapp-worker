@@ -5,7 +5,6 @@ const mysql = require('mysql2/promise');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
-const puppeteer = require('puppeteer-core');
 
 const app = express();
 app.use(express.json());
@@ -51,22 +50,18 @@ app.post('/start-session', async (req, res) => {
             fs.mkdirSync(sessionDir, { recursive: true });
         }
         
-        console.log('Creating WhatsApp client for:', instance_id);
-        console.log('Session path:', sessionDir);
+        console.log(`Creating WhatsApp client for: ${instance_id}`);
+        console.log(`Session path: ${sessionDir}`);
         
         const client = new Client({
             authStrategy: new LocalAuth({ dataPath: sessionDir }),
             puppeteer: {
                 headless: true,
-                executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome-stable',
                 args: [
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
                     '--disable-dev-shm-usage',
-                    '--disable-gpu',
-                    '--disable-software-rasterizer',
-                    '--disable-extensions',
-                    '--disable-web-security'
+                    '--disable-gpu'
                 ]
             }
         });

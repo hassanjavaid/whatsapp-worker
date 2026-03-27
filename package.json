@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "postinstall": "echo 'Ready'"
+    "postinstall": "npx puppeteer browsers install chrome || true"
   },
   "dependencies": {
     "express": "^4.18.2",
@@ -13,6 +13,6 @@
     "qrcode": "^1.5.3",
     "mysql2": "^3.6.0",
     "cors": "^2.8.5",
-    "puppeteer-core": "^21.0.0"
+    "puppeteer": "^21.0.0"
   }
 }
