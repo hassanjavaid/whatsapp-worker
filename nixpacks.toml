@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["google-chrome"]
+
+[phases.install]
+cmds = ["npm install"]
+
+[phases.start]
+cmd = "node server.js"

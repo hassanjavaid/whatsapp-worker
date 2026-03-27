@@ -60,18 +60,19 @@ app.post('/start-session', async (req, res) => {
         console.log(`🤖 Creating WhatsApp client...`);
         
         const client = new Client({
-            authStrategy: new LocalAuth({ dataPath: sessionDir }),
-            puppeteer: {
-                headless: true,
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-gpu',
-                    '--disable-software-rasterizer'
-                ]
-            }
-        });
+    authStrategy: new LocalAuth({ dataPath: sessionDir }),
+    puppeteer: {
+        headless: true,
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome-stable',
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--disable-software-rasterizer'
+        ]
+    }
+});
         
         sessions.set(instance_id, { client });
         
