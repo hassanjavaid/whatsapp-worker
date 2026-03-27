@@ -24,10 +24,11 @@ const sessions = new Map();
 
 async function initDB() {
     try {
-        console.log('Connecting to database...');
-        console.log('Host:', dbConfig.host);
-        console.log('User:', dbConfig.user);
-        console.log('Database:', dbConfig.database);
+        console.log('🔌 Connecting to database...');
+        console.log(`   Host: ${dbConfig.host}`);
+        console.log(`   Port: ${dbConfig.port}`);
+        console.log(`   User: ${dbConfig.user}`);
+        console.log(`   Database: ${dbConfig.database}`);
         
         db = await mysql.createConnection(dbConfig);
         console.log('✅ Database connected');
@@ -37,6 +38,7 @@ async function initDB() {
         
     } catch (err) {
         console.error('❌ Database connection failed:', err.message);
+        console.error('   Full error:', err);
     }
 }
 
@@ -44,14 +46,18 @@ async function initDB() {
 app.post('/start-session', async (req, res) => {
     const { instance_id, session_path } = req.body;
     
+    console.log(`\n📱 ========== START SESSION ==========`);
+    console.log(`Instance ID: ${instance_id}`);
+    console.log(`Session path: ${session_path}`);
+    
     try {
         const sessionDir = path.join(__dirname, session_path);
         if (!fs.existsSync(sessionDir)) {
+            console.log(`📁 Creating session directory: ${sessionDir}`);
             fs.mkdirSync(sessionDir, { recursive: true });
         }
         
-        console.log(`Creating WhatsApp client for: ${instance_id}`);
-        console.log(`Session path: ${sessionDir}`);
+        console.log(`🤖 Creating WhatsApp client...`);
         
         const client = new Client({
             authStrategy: new LocalAuth({ dataPath: sessionDir }),
@@ -61,7 +67,8 @@ app.post('/start-session', async (req, res) => {
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
                     '--disable-dev-shm-usage',
-                    '--disable-gpu'
+                    '--disable-gpu',
+                    '--disable-software-rasterizer'
                 ]
             }
         });
@@ -69,7 +76,8 @@ app.post('/start-session', async (req, res) => {
         sessions.set(instance_id, { client });
         
         client.on('qr', async (qr) => {
-            console.log(`📱 QR code received for ${instance_id}`);
+            console.log(`🎯 QR CODE RECEIVED for ${instance_id}`);
+            console.log(`   QR length: ${qr.length} characters`);
             const qrDataURL = await qrcode.toDataURL(qr);
             await db.execute(
                 "UPDATE instances SET qr_code = ?, status = 'scanning', qr_code_expires = DATE_ADD(NOW(), INTERVAL 2 MINUTE) WHERE instance_id = ?",
@@ -79,13 +87,14 @@ app.post('/start-session', async (req, res) => {
         });
         
         client.on('authenticated', () => {
-            console.log(`✅ ${instance_id} authenticated`);
+            console.log(`🔐 ${instance_id} authenticated successfully!`);
         });
         
         client.on('ready', async () => {
-            console.log(`✅ ${instance_id} is ready!`);
+            console.log(`🎉 ${instance_id} IS READY!`);
             const info = client.info;
             const phoneNumber = info.wid.user;
+            console.log(`   Phone number: ${phoneNumber}`);
             await db.execute(
                 "UPDATE instances SET status = 'connected', phone_number = ?, last_active = NOW() WHERE instance_id = ?",
                 [phoneNumber, instance_id]
@@ -93,7 +102,7 @@ app.post('/start-session', async (req, res) => {
         });
         
         client.on('message', async (message) => {
-            console.log(`📨 Received message from ${message.from} in ${instance_id}`);
+            console.log(`📨 Message from ${message.from} to ${instance_id}`);
             const [rows] = await db.execute("SELECT id FROM instances WHERE instance_id = ?", [instance_id]);
             if (rows.length > 0) {
                 await db.execute(
@@ -103,8 +112,8 @@ app.post('/start-session', async (req, res) => {
             }
         });
         
-        client.on('auth_failure', async () => {
-            console.log(`❌ Auth failed for ${instance_id}`);
+        client.on('auth_failure', async (msg) => {
+            console.error(`❌ Auth failed for ${instance_id}: ${msg}`);
             await db.execute("UPDATE instances SET status = 'expired' WHERE instance_id = ?", [instance_id]);
         });
         
@@ -114,13 +123,14 @@ app.post('/start-session', async (req, res) => {
             sessions.delete(instance_id);
         });
         
-        console.log('Initializing WhatsApp client...');
+        console.log(`🚀 Initializing WhatsApp client...`);
         await client.initialize();
         console.log(`✅ Client initialized for ${instance_id}`);
         res.json({ success: true });
         
     } catch (error) {
-        console.error('Error starting session:', error);
+        console.error(`❌ Error starting session for ${instance_id}:`, error.message);
+        console.error(`   Stack:`, error.stack);
         res.status(500).json({ error: error.message });
     }
 });
@@ -129,9 +139,12 @@ app.post('/start-session', async (req, res) => {
 app.post('/send-message', async (req, res) => {
     const { instance_id, recipient, message, message_id } = req.body;
     
+    console.log(`📤 Sending message from ${instance_id} to ${recipient}`);
+    
     try {
         const session = sessions.get(instance_id);
         if (!session || !session.client) {
+            console.error(`❌ Session not found for ${instance_id}`);
             if (db) await db.execute("UPDATE messages SET status = 'failed', error_message = 'Session not connected' WHERE id = ?", [message_id]);
             return res.status(400).json({ error: 'Session not connected' });
         }
@@ -141,11 +154,12 @@ app.post('/send-message', async (req, res) => {
         if (!number.includes('@')) number = `${number}@c.us`;
         
         const result = await client.sendMessage(number, message);
+        console.log(`✅ Message sent: ${result.id.id}`);
         if (db) await db.execute("UPDATE messages SET status = 'sent', message_id = ?, sent_at = NOW() WHERE id = ?", [result.id.id, message_id]);
         res.json({ success: true });
         
     } catch (error) {
-        console.error('Error sending message:', error);
+        console.error(`❌ Send error:`, error.message);
         if (db) await db.execute("UPDATE messages SET status = 'failed', error_message = ? WHERE id = ?", [error.message, message_id]);
         res.status(500).json({ error: error.message });
     }
@@ -248,7 +262,8 @@ app.get('/health', (req, res) => {
     res.json({ 
         status: 'ok', 
         sessions: sessions.size,
-        db: db ? 'connected' : 'disconnected'
+        db: db ? 'connected' : 'disconnected',
+        activeSessions: Array.from(sessions.keys())
     });
 });
 
@@ -257,7 +272,10 @@ async function start() {
     await initDB();
     const port = process.env.PORT || 3000;
     app.listen(port, () => {
-        console.log(`🚀 WhatsApp Worker running on port ${port}`);
+        console.log(`\n🚀 WhatsApp Worker running on port ${port}`);
+        console.log(`📊 Health check: /health`);
+        console.log(`💾 Database: ${db ? 'Connected' : 'Disconnected'}`);
+        console.log(`🎯 Ready to accept requests!\n`);
     });
 }
 
